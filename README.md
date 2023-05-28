@@ -1,4 +1,10 @@
-# talk-type
+# TalkType
+
+A chrome extension that helps you type faster and more accurately, with just your voice.
+
+Build using [create-chrome-ext](https://github.com/guocaoyi/create-chrome-ext), readme copied below 👇👇 for convenience.
+
+---
 
 > a chrome extension tools built with Vite + React-ts, and Manifest v3
 
@@ -13,9 +19,9 @@
 run the command
 
 ```shell
-$ cd talk-type
+cd talk-type
 
-$ npm run dev
+npm run dev
 ```
 
 ### Chrome Extension Developer Mode
