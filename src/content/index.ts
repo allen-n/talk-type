@@ -13,29 +13,35 @@ enum CaretType {
 
 var scriptAudioStream: MediaStream | null = null
 
-const socket = new WebSocket('wss://api.deepgram.com/v1/listen', ['token', DEEPGRAM_API_KEY])
-socket.onopen = () => {
-  console.debug({ event: 'onopen' })
-}
-
-socket.onmessage = (message) => {
-  console.debug({ event: 'onmessage', message })
-  const received = JSON.parse(message.data)
-  const transcript = received.channel.alternatives[0].transcript
-  console.debug(transcript)
-  if (transcript && received.is_final) {
-    console.info(transcript)
-    injectText(transcript)
+const openSocket = (): WebSocket => {
+  console.debug('opening new socket')
+  const socket = new WebSocket('wss://api.deepgram.com/v1/listen', ['token', DEEPGRAM_API_KEY])
+  socket.onopen = () => {
+    console.debug({ event: 'onopen' })
   }
+
+  socket.onmessage = (message) => {
+    console.debug({ event: 'onmessage', message })
+    const received = JSON.parse(message.data)
+    const transcript = received.channel.alternatives[0].transcript
+    console.debug(transcript)
+    if (transcript && received.is_final) {
+      console.info(transcript)
+      injectText(transcript)
+    }
+  }
+
+  socket.onclose = () => {
+    console.debug({ event: 'onclose' })
+  }
+
+  socket.onerror = (error) => {
+    console.debug({ event: 'onerror', error })
+  }
+  return socket
 }
 
-socket.onclose = () => {
-  console.debug({ event: 'onclose' })
-}
-
-socket.onerror = (error) => {
-  console.debug({ event: 'onerror', error })
-}
+var scriptSocket: WebSocket = openSocket()
 
 const handleInvalidSelection = () => {
   alert(
@@ -54,6 +60,8 @@ const handleInvalidSelection = () => {
  */
 const injectText = (text: string): Selection | null => {
   const selection = document.getSelection()
+  text = text.trim()
+  text += ' '
   if (!!selection) {
     if (selection.type == CaretType.Caret) {
       console.debug('selection is a caret')
@@ -111,6 +119,13 @@ const streamAudioToASR = async () => {
   if (stream) {
     var recorder = new MediaRecorder(stream)
     recorder.ondataavailable = (event) => {
+      if (
+        scriptSocket.readyState === scriptSocket.CLOSING ||
+        scriptSocket.readyState === scriptSocket.CLOSED
+      ) {
+        scriptSocket = openSocket()
+      }
+      const socket = scriptSocket
       if (event.data.size > 0 && socket.readyState == 1) {
         socket.send(event.data)
       } else {
