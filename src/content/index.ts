@@ -11,7 +11,7 @@ enum CaretType {
   None = 'None',
 }
 
-var scriptAudioStream: MediaStream | null = null
+const activeAudioStreams: Array<MediaStream> = []
 
 const openSocket = (): WebSocket => {
   console.debug('opening new socket')
@@ -23,7 +23,7 @@ const openSocket = (): WebSocket => {
     model: 'nova',
   }
   const url = `wss://api.deepgram.com/v1/listen?${new URLSearchParams(config)}`
-  const socket = new WebSocket('wss://api.deepgram.com/v1/listen', ['token', DEEPGRAM_API_KEY])
+  const socket = new WebSocket(url, ['token', DEEPGRAM_API_KEY])
   socket.onopen = () => {
     console.debug({ event: 'onopen' })
   }
@@ -49,15 +49,10 @@ const openSocket = (): WebSocket => {
   return socket
 }
 
-var scriptSocket: WebSocket | null = null // openSocket()
-
 const handleInvalidSelection = () => {
   alert(
     '⚠️ TalkType could not find a selection to inject text into. Please select a text input area and try again.',
   )
-  if (scriptAudioStream !== null) {
-    closeAudioStream(scriptAudioStream)
-  }
 }
 
 /**
@@ -92,6 +87,10 @@ const closeAudioStream = (stream: MediaStream) => {
   stream.getTracks().forEach((track) => track.stop())
 }
 
+const closeAllAudioStreams = () => {
+  activeAudioStreams.forEach((stream) => closeAudioStream(stream))
+}
+
 /**
  *
  * @param autoClose if true, closes the audio stream immediately after getting it (i.e. for getting mic access). Defaults to `false`.
@@ -99,48 +98,36 @@ const closeAudioStream = (stream: MediaStream) => {
  */
 const getAudioStream = async (autoClose: boolean = false): Promise<MediaStream | null> => {
   // Request media stream
-  if (scriptAudioStream !== null) {
-    return scriptAudioStream
-  }
   try {
     const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
     if (audioStream) {
       // Microphone access granted, do something with the stream
-      console.debug('Microphone access granted')
+      console.debug('Microphone access acquired! 🎉')
       if (autoClose) {
         closeAudioStream(audioStream)
-      } else {
-        scriptAudioStream = audioStream
       }
+    } else {
+      activeAudioStreams.push(audioStream)
     }
     return audioStream
   } catch (error) {
     console.error('Error getting microphone access', error)
-    scriptAudioStream = null
-    return scriptAudioStream
+    return null
   }
 }
 
-const streamAudioToASR = async () => {
+const streamAudioToASR = async (): Promise<boolean> => {
   //   see https://blog.deepgram.com/live-transcription-mic-browser/
   const stream = await getAudioStream()
 
   if (stream) {
     var recorder = new MediaRecorder(stream)
+    const socket = openSocket()
     recorder.ondataavailable = async (event) => {
-      if (
-        scriptSocket === null ||
-        scriptSocket.readyState === scriptSocket.CLOSING ||
-        scriptSocket.readyState === scriptSocket.CLOSED
-      ) {
-        scriptSocket = openSocket()
-      }
-      while (scriptSocket.readyState !== scriptSocket.OPEN) {
-        const delta = 50
+      while (socket.readyState !== socket.OPEN) {
         console.debug('Socket not ready, waiting...')
-        await new Promise((resolve) => setTimeout(resolve, delta))
+        await new Promise((resolve) => setTimeout(resolve, 50))
       }
-      const socket = scriptSocket
       if (event.data.size > 0 && socket.readyState == socket.OPEN) {
         console.debug('Sending data to socket with size', event.data.size)
         socket.send(event.data)
@@ -149,6 +136,10 @@ const streamAudioToASR = async () => {
       }
     }
     recorder.start(100) // 100-250 ms chunks or smaller work best for deepgram
+    return true
+  } else {
+    console.warn('Could not get audio stream')
+    return false
   }
 }
 
@@ -170,12 +161,15 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       }
       break
     case messageKeys.startRecording:
-      await streamAudioToASR()
+      const streamingActive = await streamAudioToASR()
+      if (!streamingActive) {
+        console.warn('Could not start streaming audio to ASR endpoint')
+      } else {
+        console.debug('Streaming audio to ASR endpoint! 🎉')
+      }
       break
     case messageKeys.stopRecording:
-      if (scriptAudioStream) {
-        closeAudioStream(scriptAudioStream)
-      }
+      closeAllAudioStreams()
       break
     default:
       console.warn('Unknown message type:', request.type)
