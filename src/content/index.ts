@@ -12,6 +12,7 @@ enum CaretType {
 }
 
 const activeAudioStreams: Array<MediaStream> = []
+const activeMediaRecorders: Array<MediaRecorder> = []
 
 const openSocket = (): WebSocket => {
   console.debug('opening new socket')
@@ -88,7 +89,12 @@ const closeAudioStream = (stream: MediaStream) => {
 }
 
 const closeAllAudioStreams = () => {
+  // Stop all active media recorders and streams, must stop media recorders first because they are consuming the streams
+  activeMediaRecorders.forEach((recorder) => recorder.stop())
   activeAudioStreams.forEach((stream) => closeAudioStream(stream))
+  // Then clear the arrays so the streams and recorders can get garbage collected
+  activeMediaRecorders.length = 0
+  activeAudioStreams.length = 0
 }
 
 /**
@@ -136,6 +142,7 @@ const streamAudioToASR = async (): Promise<boolean> => {
       }
     }
     recorder.start(100) // 100-250 ms chunks or smaller work best for deepgram
+    activeMediaRecorders.push(recorder)
     return true
   } else {
     console.warn('Could not get audio stream')
