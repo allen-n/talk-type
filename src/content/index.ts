@@ -15,6 +15,14 @@ var scriptAudioStream: MediaStream | null = null
 
 const openSocket = (): WebSocket => {
   console.debug('opening new socket')
+  const config = {
+    language: 'en-US',
+    smart_format: 'true',
+    punctuate: 'true',
+    interim_results: 'true',
+    model: 'nova',
+  }
+  const url = `wss://api.deepgram.com/v1/listen?${new URLSearchParams(config)}`
   const socket = new WebSocket('wss://api.deepgram.com/v1/listen', ['token', DEEPGRAM_API_KEY])
   socket.onopen = () => {
     console.debug({ event: 'onopen' })
@@ -31,8 +39,8 @@ const openSocket = (): WebSocket => {
     }
   }
 
-  socket.onclose = () => {
-    console.debug({ event: 'onclose' })
+  socket.onclose = (event) => {
+    console.debug({ eventName: 'onclose', event })
   }
 
   socket.onerror = (error) => {
@@ -41,7 +49,7 @@ const openSocket = (): WebSocket => {
   return socket
 }
 
-var scriptSocket: WebSocket = openSocket()
+var scriptSocket: WebSocket | null = null // openSocket()
 
 const handleInvalidSelection = () => {
   alert(
@@ -116,17 +124,25 @@ const getAudioStream = async (autoClose: boolean = false): Promise<MediaStream |
 const streamAudioToASR = async () => {
   //   see https://blog.deepgram.com/live-transcription-mic-browser/
   const stream = await getAudioStream()
+
   if (stream) {
     var recorder = new MediaRecorder(stream)
-    recorder.ondataavailable = (event) => {
+    recorder.ondataavailable = async (event) => {
       if (
+        scriptSocket === null ||
         scriptSocket.readyState === scriptSocket.CLOSING ||
         scriptSocket.readyState === scriptSocket.CLOSED
       ) {
         scriptSocket = openSocket()
       }
+      while (scriptSocket.readyState !== scriptSocket.OPEN) {
+        const delta = 50
+        console.debug('Socket not ready, waiting...')
+        await new Promise((resolve) => setTimeout(resolve, delta))
+      }
       const socket = scriptSocket
-      if (event.data.size > 0 && socket.readyState == 1) {
+      if (event.data.size > 0 && socket.readyState == socket.OPEN) {
+        console.debug('Sending data to socket with size', event.data.size)
         socket.send(event.data)
       } else {
         console.warn('Socket not ready or there was no data, state was', socket.readyState)
