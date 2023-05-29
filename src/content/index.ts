@@ -2,6 +2,7 @@ import { messageKeys } from '../utils/messageKeys'
 import { DEEPGRAM_API_KEY } from '../secrets'
 import AudioStreamManager from './AudioStreamManager'
 
+// TODO @allen-n: consider using the deepgram SDK instead of a websocket
 if (!DEEPGRAM_API_KEY) {
   throw new Error('DEEPGRAM_API_KEY is not defined')
 }
@@ -31,6 +32,10 @@ const openSocket = (): WebSocket => {
   socket.onmessage = (message) => {
     console.debug({ event: 'onmessage', message })
     const received = JSON.parse(message.data)
+    if (typeof received.channel === 'undefined') {
+      console.debug('received.channel is undefined')
+      return
+    }
     const transcript = received.channel.alternatives[0].transcript
     console.debug(transcript)
     if (transcript && received.is_final) {

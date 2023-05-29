@@ -55,7 +55,7 @@ export default class AudioStreamManager {
           await new Promise((resolve) => setTimeout(resolve, 50))
         }
         if (event.data.size > 0 && socket.readyState == socket.OPEN) {
-          console.debug('Sending data to socket with size', event.data.size)
+          // Debug here to see if data is being sent
           socket.send(event.data)
         } else {
           console.warn('Socket not ready or there was no data, state was', socket.readyState)
