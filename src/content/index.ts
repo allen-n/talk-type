@@ -1,7 +1,7 @@
 import { messageKeys } from '../utils/messageKeys'
-import { DEEPGRAM_API_KEY } from '../secrets'
 import AudioStreamManager from './AudioStreamManager'
-
+import SocketManager from './SocketManager'
+import { DEEPGRAM_API_KEY } from '../secrets'
 // TODO @allen-n: consider using the deepgram SDK instead of a websocket
 if (!DEEPGRAM_API_KEY) {
   throw new Error('DEEPGRAM_API_KEY is not defined')
@@ -14,51 +14,21 @@ enum CaretType {
 }
 const audioStreamManager = new AudioStreamManager()
 
-const openSocket = (): WebSocket => {
-  console.debug('opening new socket')
-  const config = {
-    language: 'en-US',
-    smart_format: 'true',
-    punctuate: 'true',
-    interim_results: 'true',
-    model: 'nova',
+const onMessageCallback = (message: MessageEvent) => {
+  const received = JSON.parse(message.data)
+  if (typeof received.channel === 'undefined') {
+    console.debug('received.channel is undefined')
+    return
   }
-  const url = `wss://api.deepgram.com/v1/listen?${new URLSearchParams(config)}`
-  const socket = new WebSocket(url, ['token', DEEPGRAM_API_KEY])
-  socket.onopen = () => {
-    console.debug({ event: 'onopen' })
+  const transcript = received.channel.alternatives[0].transcript
+  console.debug(transcript)
+  if (transcript && received.is_final) {
+    console.info(transcript)
+    injectText(transcript)
   }
-
-  socket.onmessage = (message) => {
-    console.debug({ event: 'onmessage', message })
-    const received = JSON.parse(message.data)
-    if (typeof received.channel === 'undefined') {
-      console.debug('received.channel is undefined')
-      return
-    }
-    const transcript = received.channel.alternatives[0].transcript
-    console.debug(transcript)
-    if (transcript && received.is_final) {
-      console.info(transcript)
-      injectText(transcript)
-    }
-  }
-
-  socket.onclose = (event) => {
-    console.debug({ eventName: 'onclose', event })
-  }
-
-  socket.onerror = (error) => {
-    console.debug({ event: 'onerror', error })
-  }
-  return socket
 }
 
-const handleInvalidSelection = () => {
-  alert(
-    '⚠️ TalkType could not find a selection to inject text into. Please select a text input area and try again.',
-  )
-}
+const socketManager = new SocketManager([], [onMessageCallback], [], [])
 
 /**
  * Inject text into the current selection
@@ -84,7 +54,10 @@ const injectText = (text: string): Selection | null => {
     return selection
   }
   console.warn('selection does not exist')
-  handleInvalidSelection()
+  alert(
+    '⚠️ TalkType could not find a selection to inject text into. Please select a text input area and try again.',
+  )
+  audioStreamManager.closeAllAudioStreams()
   return null
 }
 
@@ -106,7 +79,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       }
       break
     case messageKeys.startRecording:
-      const socket = openSocket()
+      const socket = await socketManager.openSocket(true)
       const streamingActive = await audioStreamManager.streamAudioToSocket(socket)
       if (!streamingActive) {
         console.warn('Could not start streaming audio to ASR endpoint')

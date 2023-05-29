@@ -44,16 +44,17 @@ export default class AudioStreamManager {
     }
   }
 
+  /**
+   *
+   * @param socket The socket to stream audio to
+   * @returns true if successful, false otherwise
+   */
   streamAudioToSocket = async (socket: WebSocket): Promise<boolean> => {
     //   see https://blog.deepgram.com/live-transcription-mic-browser/
     const stream = await this.getAudioStream()
     if (stream) {
       var recorder = new MediaRecorder(stream)
       recorder.ondataavailable = async (event) => {
-        while (socket.readyState !== socket.OPEN) {
-          console.debug('Socket not ready, waiting...')
-          await new Promise((resolve) => setTimeout(resolve, 50))
-        }
         if (event.data.size > 0 && socket.readyState == socket.OPEN) {
           // Debug here to see if data is being sent
           socket.send(event.data)
