@@ -18,6 +18,11 @@ export default class TextInjector {
     this.failedInjectionCallback = failedInjectionCallback
   }
 
+  // Use selection.setBaseAndExtent(selection.focusNode, 9, selection.focusNode, 14) to select the text to delete
+  // Use document.execCommand('delete',false,"bbb") to delete temp text
+  // Use document.execCommand('insertText', false, text) to insert the new temp text
+  // For this to work we have to keep track of how long the text we are inserting is!
+
   private injectTemporaryText = (text: string, selection: Selection): void => {
     if (this.focusNode === null || this.focusOffset === null) {
       //   First call to this inject text
