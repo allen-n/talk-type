@@ -1,18 +1,33 @@
 import { messageKeys } from '../utils/messageKeys'
 import AudioStreamManager from './AudioStreamManager'
 import SocketManager from './SocketManager'
+import TextManager from './TextManager'
 import { DEEPGRAM_API_KEY } from '../secrets'
 // TODO @allen-n: consider using the deepgram SDK instead of a websocket
 if (!DEEPGRAM_API_KEY) {
   throw new Error('DEEPGRAM_API_KEY is not defined')
 }
 
-enum CaretType {
-  Caret = 'Caret',
-  Selection = 'Selection',
-  None = 'None',
-}
 const audioStreamManager = new AudioStreamManager()
+
+// Callbacks
+
+const failedTextInjectionCallback = () => {
+  alert(
+    '⚠️ TalkType could not find a selection to inject text into. Please select a text input area and try again.',
+  )
+  audioStreamManager.closeAllAudioStreams()
+}
+
+const textManager = new TextManager(failedTextInjectionCallback)
+
+const testCallback = async () => {
+  for (let i = 0; i < 20; i++) {
+    const isFinal = Math.round(i / 3) === i / 3
+    textManager.handleTextUpdate(`Number is ${i}`, isFinal)
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+}
 
 const onMessageCallback = (message: MessageEvent) => {
   const received = JSON.parse(message.data)
@@ -21,11 +36,8 @@ const onMessageCallback = (message: MessageEvent) => {
     return
   }
   const transcript = received.channel.alternatives[0].transcript
-  console.debug(transcript)
-  if (transcript && received.is_final) {
-    console.info(transcript)
-    injectText(transcript)
-  }
+  textManager.handleTextUpdate(transcript, received.is_final)
+  console.debug({ transcript: transcript, is_final: received.is_final })
 }
 
 const socketManager = new SocketManager([], [onMessageCallback], [], [])
@@ -36,30 +48,30 @@ const socketManager = new SocketManager([], [onMessageCallback], [], [])
  * @param text The text to append to the current selection
  * @returns the current selection, if it exists
  */
-const injectText = (text: string): Selection | null => {
-  const selection = document.getSelection()
-  text = text.trim()
-  text += ' '
-  if (!!selection) {
-    if (selection.type == CaretType.Caret) {
-      console.debug('selection is a caret')
-      document.execCommand('insertText', false, text)
-    } else if (selection.type === CaretType.Selection) {
-      console.debug('selection is a selection')
-    } else if (selection.type === CaretType.None) {
-      console.debug('selection is none')
-    } else {
-      console.warn('selection is not a caret, selection, or none')
-    }
-    return selection
-  }
-  console.warn('selection does not exist')
-  alert(
-    '⚠️ TalkType could not find a selection to inject text into. Please select a text input area and try again.',
-  )
-  audioStreamManager.closeAllAudioStreams()
-  return null
-}
+// const injectText = (text: string): Selection | null => {
+//   const selection = document.getSelection()
+//   text = text.trim()
+//   text += ' '
+//   if (!!selection) {
+//     if (selection.type == CaretType.Caret) {
+//       console.debug('selection is a caret')
+//       document.execCommand('insertText', false, text)
+//     } else if (selection.type === CaretType.Selection) {
+//       console.debug('selection is a selection')
+//     } else if (selection.type === CaretType.None) {
+//       console.debug('selection is none')
+//     } else {
+//       console.warn('selection is not a caret, selection, or none')
+//     }
+//     return selection
+//   }
+//   console.warn('selection does not exist')
+//   alert(
+//     '⚠️ TalkType could not find a selection to inject text into. Please select a text input area and try again.',
+//   )
+//   audioStreamManager.closeAllAudioStreams()
+//   return null
+// }
 
 console.debug('TalkType content script loaded! 🚀🚀')
 
@@ -77,6 +89,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       } else {
         console.debug('Microphone access granted:', result)
       }
+      // testCallback() // TODO @allen-n: remove this
       break
     case messageKeys.startRecording:
       const socket = await socketManager.openSocket(true)
