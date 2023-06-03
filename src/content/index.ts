@@ -36,42 +36,14 @@ const onMessageCallback = (message: MessageEvent) => {
     return
   }
   const transcript = received.channel.alternatives[0].transcript
-  textManager.handleTextUpdate(transcript, received.is_final)
-  console.debug({ transcript: transcript, is_final: received.is_final })
+  if (transcript) {
+    // textManager.handleSimpleTextUpdate(transcript, received.is_final)
+    textManager.handleTextUpdate(transcript, received.is_final)
+  }
+  // console.debug({ transcript: transcript, is_final: received.is_final })
 }
 
 const socketManager = new SocketManager([], [onMessageCallback], [], [])
-
-/**
- * Inject text into the current selection
- *
- * @param text The text to append to the current selection
- * @returns the current selection, if it exists
- */
-// const injectText = (text: string): Selection | null => {
-//   const selection = document.getSelection()
-//   text = text.trim()
-//   text += ' '
-//   if (!!selection) {
-//     if (selection.type == CaretType.Caret) {
-//       console.debug('selection is a caret')
-//       document.execCommand('insertText', false, text)
-//     } else if (selection.type === CaretType.Selection) {
-//       console.debug('selection is a selection')
-//     } else if (selection.type === CaretType.None) {
-//       console.debug('selection is none')
-//     } else {
-//       console.warn('selection is not a caret, selection, or none')
-//     }
-//     return selection
-//   }
-//   console.warn('selection does not exist')
-//   alert(
-//     '⚠️ TalkType could not find a selection to inject text into. Please select a text input area and try again.',
-//   )
-//   audioStreamManager.closeAllAudioStreams()
-//   return null
-// }
 
 console.debug('TalkType content script loaded! 🚀🚀')
 

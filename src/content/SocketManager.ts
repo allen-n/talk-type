@@ -47,7 +47,7 @@ export default class SocketManager {
     }
 
     socket.onmessage = (message) => {
-      console.debug({ event: 'onmessage', message })
+      // console.debug({ event: 'onmessage', message })
       for (const callback of this.onmessageCallbacks) {
         callback(message)
       }
