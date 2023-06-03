@@ -1,4 +1,5 @@
 // TODO @allen-n: Consider storing transcribed text in chrome storage too in case injection fails
+import { TalkTypeError } from '../utils/TalkTypeError'
 enum CaretType {
   Caret = 'Caret',
   Selection = 'Selection',
@@ -9,19 +10,26 @@ enum PasteType {
   HTML = 'text/html',
 }
 
+export class TextManagerError extends TalkTypeError {
+  constructor(message: string) {
+    super(`TextManager: ${message}`)
+    this.name = 'TextManagerError'
+  }
+}
+
 /**
  * A class to manage text injection into the DOM
  */
 export default class TextManager {
   private startTempOffset: number | null = null
-  private failedInjectionCallback: (err: string) => void = () => {}
+  private failedInjectionCallback: (err: TextManagerError) => void = () => {}
   private dataTransfer: DataTransfer
 
   /**
    *
    * @param failedInjectionCallback A callback to be called when injection fails, with the error message
    */
-  constructor(failedInjectionCallback: (err: string) => void = () => {}) {
+  constructor(failedInjectionCallback: (err: TextManagerError) => void = () => {}) {
     this.failedInjectionCallback = failedInjectionCallback
     this.dataTransfer = new DataTransfer()
   }
@@ -30,7 +38,7 @@ export default class TextManager {
     if (selection.anchorNode === null) {
       //   First call to this inject text
       console.warn('selection anchor node is null')
-      this.failedInjectionCallback('TalkType Error: Invalid selection')
+      this.failedInjectionCallback(new TextManagerError('Invalid selection'))
       return
     }
     if (this.startTempOffset === null) {
@@ -51,7 +59,11 @@ export default class TextManager {
       text += ' '
     }
     console.debug({ startOffset: this.startTempOffset })
-    document.execCommand('insertText', false, text)
+    const result = document.execCommand('insertText', false, text)
+    if (!result) {
+      console.warn('insertText failed')
+      this.failedInjectionCallback(new TextManagerError('Unsupported editor'))
+    }
     if (isFinal) {
       this.resetCursor()
     }
@@ -74,7 +86,7 @@ export default class TextManager {
   ) => {
     // this may be 'text/html' if it's required
     console.debug("Data transfer's types: ", this.dataTransfer)
-    this.dataTransfer.setData('text/plain', text)
+    this.dataTransfer.setData(type, text)
 
     target.dispatchEvent(
       new ClipboardEvent('paste', {
@@ -121,16 +133,24 @@ export default class TextManager {
         console.debug('selection is a caret')
         this.injectText(text, selection, isTextFinal)
       } else if (selection.type === CaretType.Selection) {
-        console.debug('selection is a selection')
+        this.failedInjectionCallback(
+          new TextManagerError(
+            "Replacing text isn't supported, place your cursor somewhere to begin voice typing",
+          ),
+        )
       } else if (selection.type === CaretType.None) {
-        console.debug('selection is none')
+        this.failedInjectionCallback(
+          new TextManagerError(
+            'Editable text area not detected. Note that this includes some full featured web editors like Google Docs.',
+          ),
+        )
       } else {
         console.warn('selection is not a caret, selection, or none')
       }
       return selection
     }
     console.warn('TalkType Error: selection does not exist')
-    this.failedInjectionCallback('Failed to inject text: No selection found.')
+    this.failedInjectionCallback(new TextManagerError('No selection found.'))
 
     return null
   }

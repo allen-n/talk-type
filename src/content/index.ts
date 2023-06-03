@@ -1,7 +1,7 @@
 import { messageKeys } from '../utils/messageKeys'
 import AudioStreamManager from './AudioStreamManager'
 import SocketManager from './SocketManager'
-import TextManager from './TextManager'
+import TextManager, { TextManagerError } from './TextManager'
 import { DEEPGRAM_API_KEY } from '../secrets'
 // TODO @allen-n: consider using the deepgram SDK instead of a websocket
 if (!DEEPGRAM_API_KEY) {
@@ -12,10 +12,8 @@ const audioStreamManager = new AudioStreamManager()
 
 // Callbacks
 
-const failedTextInjectionCallback = () => {
-  alert(
-    '⚠️ TalkType could not find a selection to inject text into. Please select a text input area and try again.',
-  )
+const failedTextInjectionCallback = (err: TextManagerError) => {
+  alert(err.message)
   audioStreamManager.closeAllAudioStreams()
 }
 
